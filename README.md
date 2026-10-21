@@ -19,8 +19,9 @@ key, and shows the official geoblock verdict instead of working around it.
 | Code, migrations, dashboard | complete |
 | Tests | 79 unit + 17 integration (D1 inside workerd), all passing on 2026-10-21 |
 | Type-check, dry-run deploy | passing |
-| Cloudflare deployment | **pending a one-time `npx wrangler login` on the deploying machine** (see Deploy) |
-| Live URL | not yet verified; it will be `https://polymarket-edge-scanner.<your-subdomain>.workers.dev` |
+| Production verification | done on 2026-10-21 on a **temporary preview account** (`wrangler deploy --temporary`): migrations applied, 17 manual scans all `ok`, 23 production checks passing, 4 Workers AI models measured |
+| Deployment on the owner's account | **pending a one-time `npx wrangler login`** (see Deploy); the temporary account has no cron trigger quota and expires unless claimed |
+| Live URL on the owner's account | not yet verified; it will be `https://polymarket-edge-scanner.<your-subdomain>.workers.dev` |
 
 ## Architecture
 
@@ -66,7 +67,7 @@ scripts/               audit-env, check-plan, deploy (sh + ps1), teardown, smoke
 
 Node 22.23.3 · npm 10.9.9 · TypeScript 5.9.3 · Wrangler 4.151.3 · Hono 4.13.13 · zod 4.6.5 ·
 Vitest 4.1.12 + `@cloudflare/vitest-plugin` 1.4.6 · esbuild 0.28.2 · `@cloudflare/workers-types` 5.20261021.1.
-Workers AI model: `@cf/meta/llama-3.1-8b-instruct` (listed for JSON mode in the official docs; configurable with `AI_MODEL`).
+Workers AI model: `@cf/meta/llama-3.1-8b-instruct-fp8-fast` (measured, see below; configurable with `AI_MODEL`).
 
 ## The strategy, honestly
 
@@ -107,10 +108,29 @@ evidence; `AVOID` needs a stated risk; unsupported `high` confidence becomes `lo
 adjustment is stored next to the analysis. The model cannot place orders, change limits, see
 secrets or decide about quotas: it only ever produces a row in `ai_analyses`.
 
-Budget: at most 1 call per run and 60 calls or 3,000 estimated neurons per UTC day (configurable,
-hard-capped at 150 calls and 8,000 neurons), out of the 10,000 free neurons. Usage is estimated
-from the returned token counts and the published per-token rates. When the budget is spent, the
-model errors, or the output is invalid, the scanner continues without it and records why.
+Budget: at most 1 call per run (pricing runs only) and 60 calls or 3,000 estimated neurons per UTC
+day (configurable, hard-capped at 150 calls and 8,000 neurons), out of the 10,000 free neurons.
+Usage is estimated from the returned token counts and the published per-token rates. When the
+budget is spent, the model errors, or the output is invalid, the scanner continues without it and
+records why. A model reported as deprecated or unknown is latched in `system_state` and not
+called again until `AI_MODEL` changes.
+
+### Model choice, measured on 2026-10-21
+
+The model listed on the official JSON-mode page, `@cf/meta/llama-3.1-8b-instruct`, answers
+`5028: deprecated on 2026-05-30` at call time. Four live candidates were tested on the deployed
+Worker with the same prompt and `response_format: json_schema` (3 calls each for the finalists):
+
+| Model | Schema-valid output | Neurons / call | Wall time of the run |
+| --- | --- | --- | --- |
+| `@cf/meta/llama-3.1-8b-instruct-fp8-fast` (default) | 4 / 4 | 7.8 – 13.7 | 1.1 – 2.3 s |
+| `@cf/ibm-granite/granite-4.0-h-micro` | 4 / 4 | 2.6 – 3.7 | 5.0 – 9.1 s |
+| `@cf/qwen/qwen3-30b-a3b-fp8` | 0 / 1 (reasoning consumed the 450-token budget, no JSON) | 15.8 – 17.3 | 3.4 – 4.5 s |
+| `@cf/openai/gpt-oss-20b` | 0 / 1 (same) | 24.9 | 5.2 s |
+
+Newer models answer in the OpenAI-style envelope (`choices[0].message.content`) rather than the
+legacy `response` field; the parser accepts both, strips `<think>` blocks and fences, and
+extracts the first JSON object from surrounding prose before validating.
 
 ## Simulation only, geoblock respected
 
@@ -165,6 +185,23 @@ npm run dev                  # http://localhost:8787  (dashboard + API; cron: cu
 Local admin token: create `apps/worker/.dev.vars` with `ADMIN_TOKEN=<random 32+ chars>` (git-ignored).
 
 ## Deploy
+
+### Without an account (preview, verified on 2026-10-21)
+
+Wrangler can deploy to a **temporary preview account** that needs no login and can be claimed into
+a real account from the link it prints (valid about one hour). It is how the production checks of
+this repository were run. Its limits differ from a normal Free account: **0 cron triggers**, so
+only manual scans run there.
+
+```bash
+npx wrangler d1 create pes-db --temporary                       # prints the database_id and the claim URL
+# put the database_id into apps/worker/wrangler.jsonc, then:
+npx wrangler d1 migrations apply pes-db --remote --temporary --config apps/worker/wrangler.jsonc
+npx wrangler deploy --temporary --config apps/worker/wrangler.jsonc
+printf '%s' "$(openssl rand -hex 24)" | npx wrangler secret put ADMIN_TOKEN --temporary --config apps/worker/wrangler.jsonc
+```
+
+### On your own account
 
 One-time, on the deploying machine (opens the browser for Cloudflare's OAuth consent):
 

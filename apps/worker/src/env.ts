@@ -30,7 +30,7 @@ export function parseConfig(env: Partial<WorkerEnv>): ScannerConfig {
     simulationOnly: env.SIMULATION_ONLY === 'true',
     cronSchedule: env.CRON_SCHEDULE ?? '*/15 * * * *',
     aiEnabled: env.AI_ENABLED !== 'false',
-    aiModel: env.AI_MODEL ?? '@cf/meta/llama-3.1-8b-instruct',
+    aiModel: env.AI_MODEL ?? '@cf/meta/llama-3.1-8b-instruct-fp8-fast',
     aiMaxCallsPerRun: int(env.AI_MAX_CALLS_PER_RUN, 1, 0, HARD_CAPS.maxAiCallsPerRun),
     aiMaxCallsPerDay: int(env.AI_MAX_CALLS_PER_DAY, 60, 0, HARD_CAPS.maxAiCallsPerDay),
     aiMaxNeuronsPerDay: int(env.AI_MAX_NEURONS_PER_DAY, 3000, 0, HARD_CAPS.maxAiNeuronsPerDay),

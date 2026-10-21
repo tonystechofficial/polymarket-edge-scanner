@@ -22,6 +22,17 @@ describe('AI response parsing', () => {
     expect(parseAiResponse({ response: JSON.stringify(valid) }).ok).toBe(true);
     expect(parseAiResponse({ response: '```json\n' + JSON.stringify(valid) + '\n```' }).ok).toBe(true);
   });
+  it('accepts the OpenAI-style envelope used by newer Workers AI models', () => {
+    const envelope = { id: 'chatcmpl-1', object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content: JSON.stringify(valid) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } };
+    expect(parseAiResponse(envelope).ok).toBe(true);
+    expect(parseAiResponse({ response: null, ...envelope }).ok).toBe(true);
+  });
+  it('strips reasoning blocks and surrounding prose before parsing', () => {
+    const content = '<think>\nlet me reason about this market\n</think>\nHere is the JSON you asked for:\n' + JSON.stringify(valid) + '\nHope this helps.';
+    const r = parseAiResponse({ choices: [{ message: { content } }] });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.parsed.recommendation).toBe('INSUFFICIENT_EVIDENCE');
+  });
   it('rejects malformed or schema-violating output without throwing', () => {
     expect(parseAiResponse({ response: 'not json' }).ok).toBe(false);
     expect(parseAiResponse({ response: { ...valid, probability_estimate: 1.7 } }).ok).toBe(false);

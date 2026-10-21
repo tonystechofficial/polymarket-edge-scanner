@@ -91,40 +91,48 @@ export class Repo {
   // ---- markets -------------------------------------------------------------
 
   async upsertMarkets(markets: TrackedMarket[], eventCounts: Map<string, number>, now: string): Promise<void> {
-    const stmts = markets.map((m) =>
-      this.stmt(
-        `INSERT INTO markets (id, condition_id, slug, question, description, category, tags_json, end_date, yes_token_id, no_token_id, outcomes_json,
-           fee_rate, fee_exponent, fee_source, neg_risk, event_id, event_market_count, liquidity, volume_24h, min_order_size, tick_size, status, first_seen_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tracked', ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           description = excluded.description, category = excluded.category, tags_json = excluded.tags_json, end_date = excluded.end_date,
-           fee_rate = excluded.fee_rate, fee_exponent = excluded.fee_exponent, fee_source = excluded.fee_source,
-           event_market_count = excluded.event_market_count, liquidity = excluded.liquidity, volume_24h = excluded.volume_24h, last_seen_at = excluded.last_seen_at`,
-        m.id,
-        m.conditionId,
-        m.slug,
-        m.question,
-        m.description.slice(0, 4000),
-        m.category,
-        JSON.stringify(m.tags.slice(0, 20)),
-        m.endDate,
-        m.yesTokenId,
-        m.noTokenId,
-        JSON.stringify(m.outcomes),
-        m.fee.rate,
-        m.fee.exponent,
-        m.fee.source,
-        m.negRisk ? 1 : 0,
-        m.eventId,
-        m.eventId ? (eventCounts.get(m.eventId) ?? null) : null,
-        m.liquidity,
-        m.volume24h,
-        m.minOrderSize,
-        m.tickSize,
-        now,
-        now,
-      ),
-    );
+    const ROW = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tracked', ?, ?)";
+    const stmts: D1PreparedStatement[] = [];
+    // 23 bound parameters per row: 4 rows per statement stay under the 100-parameter limit.
+    for (let i = 0; i < markets.length; i += 4) {
+      const chunk = markets.slice(i, i + 4);
+      stmts.push(
+        this.stmt(
+          `INSERT INTO markets (id, condition_id, slug, question, description, category, tags_json, end_date, yes_token_id, no_token_id, outcomes_json,
+             fee_rate, fee_exponent, fee_source, neg_risk, event_id, event_market_count, liquidity, volume_24h, min_order_size, tick_size, status, first_seen_at, last_seen_at)
+           VALUES ${chunk.map(() => ROW).join(',')}
+           ON CONFLICT(id) DO UPDATE SET
+             description = excluded.description, category = excluded.category, tags_json = excluded.tags_json, end_date = excluded.end_date,
+             fee_rate = excluded.fee_rate, fee_exponent = excluded.fee_exponent, fee_source = excluded.fee_source,
+             event_market_count = excluded.event_market_count, liquidity = excluded.liquidity, volume_24h = excluded.volume_24h, last_seen_at = excluded.last_seen_at`,
+          ...chunk.flatMap((m) => [
+            m.id,
+            m.conditionId,
+            m.slug,
+            m.question,
+            m.description.slice(0, 4000),
+            m.category,
+            JSON.stringify(m.tags.slice(0, 20)),
+            m.endDate,
+            m.yesTokenId,
+            m.noTokenId,
+            JSON.stringify(m.outcomes),
+            m.fee.rate,
+            m.fee.exponent,
+            m.fee.source,
+            m.negRisk ? 1 : 0,
+            m.eventId,
+            m.eventId ? (eventCounts.get(m.eventId) ?? null) : null,
+            m.liquidity,
+            m.volume24h,
+            m.minOrderSize,
+            m.tickSize,
+            now,
+            now,
+          ]),
+        ),
+      );
+    }
     await this.batch(stmts);
   }
 
@@ -300,8 +308,15 @@ export class Repo {
     const a: AiAnalysis = outcome.analysis;
     await this.batch([
       this.stmt(
-        `INSERT OR IGNORE INTO ai_analyses (market_id, created_at, model, prompt_hash, status, summary, probability_estimate, confidence, supporting_json, contradicting_json, sources_json, resolution_risks_json, data_freshness, recommendation, adjustments_json, input_tokens, output_tokens, neurons_est, error, raw_excerpt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO ai_analyses (market_id, created_at, model, prompt_hash, status, summary, probability_estimate, confidence, supporting_json, contradicting_json, sources_json, resolution_risks_json, data_freshness, recommendation, adjustments_json, input_tokens, output_tokens, neurons_est, error, raw_excerpt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(market_id, prompt_hash) DO UPDATE SET
+           created_at = excluded.created_at, model = excluded.model, status = excluded.status, summary = excluded.summary,
+           probability_estimate = excluded.probability_estimate, confidence = excluded.confidence, supporting_json = excluded.supporting_json,
+           contradicting_json = excluded.contradicting_json, sources_json = excluded.sources_json, resolution_risks_json = excluded.resolution_risks_json,
+           data_freshness = excluded.data_freshness, recommendation = excluded.recommendation, adjustments_json = excluded.adjustments_json,
+           input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, neurons_est = excluded.neurons_est,
+           error = excluded.error, raw_excerpt = excluded.raw_excerpt`,
         marketId,
         now,
         outcome.model,

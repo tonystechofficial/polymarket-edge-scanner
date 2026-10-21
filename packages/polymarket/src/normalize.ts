@@ -1,6 +1,7 @@
 import {
   HARD_CAPS,
   parseStringArray,
+  round,
   toNumber,
   type BookLevel,
   type ClobBook,
@@ -151,8 +152,8 @@ export function depthUsdc(levels: BookLevel[], maxLevels = HARD_CAPS.maxBookLeve
 export function observationFromBook(marketId: string, side: Side, book: OrderBook, now: Date = new Date()): PriceObservation {
   const bestBid = book.bids[0]?.price ?? null;
   const bestAsk = book.asks[0]?.price ?? null;
-  const mid = bestBid !== null && bestAsk !== null ? (bestBid + bestAsk) / 2 : null;
-  const spread = bestBid !== null && bestAsk !== null ? bestAsk - bestBid : null;
+  const mid = bestBid !== null && bestAsk !== null ? round((bestBid + bestAsk) / 2, 4) : null;
+  const spread = bestBid !== null && bestAsk !== null ? round(bestAsk - bestBid, 4) : null;
   return {
     marketId,
     tokenId: book.tokenId,

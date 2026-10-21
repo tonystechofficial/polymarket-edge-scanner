@@ -50,6 +50,9 @@ export const AI_MODEL_NEURON_RATES: Record<string, { inputPerMTok: number; outpu
   '@cf/meta/llama-3.2-3b-instruct': { inputPerMTok: 4_625, outputPerMTok: 30_475 },
   '@cf/qwen/qwen3-30b-a3b-fp8': { inputPerMTok: 4_625, outputPerMTok: 30_475 },
   '@cf/openai/gpt-oss-20b': { inputPerMTok: 18_182, outputPerMTok: 27_273 },
+  '@cf/ibm-granite/granite-4.0-h-micro': { inputPerMTok: 1_542, outputPerMTok: 10_158 },
+  '@cf/google/gemma-4-26b-a4b-it': { inputPerMTok: 9_091, outputPerMTok: 27_273 },
+  '@cf/zai-org/glm-4.7-flash': { inputPerMTok: 5_500, outputPerMTok: 36_400 },
 };
 
 /** Fallback neuron rate when the model is unknown: the most expensive rate of the table above. */

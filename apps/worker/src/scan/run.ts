@@ -95,7 +95,7 @@ export async function runScan(env: WorkerEnv, trigger: Trigger, deps: ScanDeps =
 
   await repo.startRun(runId, trigger, 'init', nowIso);
   try {
-    const states = await repo.getStates(['run_counter', 'price_cursor', 'geoblock_json', 'last_cleanup_at']);
+    const states = await repo.getStates(['run_counter', 'price_cursor', 'geoblock_json', 'last_cleanup_at', 'ai_model_error']);
     const runCounter = Number(states.run_counter ?? 0) || 0;
     let cursor = Number(states.price_cursor ?? 0) || 0;
     const params = paramsFromRecords(await repo.loadParamRows());
@@ -133,10 +133,11 @@ export async function runScan(env: WorkerEnv, trigger: Trigger, deps: ScanDeps =
       await resolve(gamma, repo, now, details);
     }
 
-    if (cfg.aiEnabled && deps.ai && subBudget.remaining > 0 && repo.statements < HARD_CAPS.maxD1StatementsPerRun - 4) {
+    if (cfg.aiEnabled && deps.ai && summary.phase === 'price' && subBudget.remaining > 0 && repo.statements < HARD_CAPS.maxD1StatementsPerRun - 4) {
       const usage = await repo.quotaToday(day);
       const budget = new AiBudget({ maxCallsPerRun: cfg.aiMaxCallsPerRun, maxCallsPerDay: cfg.aiMaxCallsPerDay, maxNeuronsPerDay: cfg.aiMaxNeuronsPerDay }, { calls: usage.ai_calls ?? 0, neurons: usage.ai_neurons_est ?? 0 });
-      const ai = await analyze(deps.ai, repo, cfg, touched, accepted, budget, now, details);
+      const ai = await analyze(deps.ai, repo, cfg, touched, accepted, budget, now, details, states.ai_model_error ?? null);
+      if (ai.modelError) stateUpdates.ai_model_error = ai.modelError;
       summary.aiCalls = ai.calls;
       aiNeurons = ai.neurons;
       quota.ai_calls = ai.calls;
@@ -419,8 +420,13 @@ async function resolve(gamma: GammaClient, repo: Repo, now: Date, details: Recor
 
 // ---------------------------------------------------------------------------
 
-async function analyze(ai: AiBinding, repo: Repo, cfg: ScannerConfig, touched: TrackedMarket[], accepted: Set<string>, budget: AiBudget, now: Date, details: Record<string, unknown>): Promise<{ calls: number; neurons: number; inputTokens: number; outputTokens: number }> {
-  const result = { calls: 0, neurons: 0, inputTokens: 0, outputTokens: 0 };
+async function analyze(ai: AiBinding, repo: Repo, cfg: ScannerConfig, touched: TrackedMarket[], accepted: Set<string>, budget: AiBudget, now: Date, details: Record<string, unknown>, modelErrorState: string | null): Promise<{ calls: number; neurons: number; inputTokens: number; outputTokens: number; modelError?: string }> {
+  const result: { calls: number; neurons: number; inputTokens: number; outputTokens: number; modelError?: string } = { calls: 0, neurons: 0, inputTokens: 0, outputTokens: 0 };
+  // A model known to be unusable (deprecated, unknown) is not retried until AI_MODEL changes.
+  if (modelErrorState && modelErrorState.startsWith(`${cfg.aiModel}|`)) {
+    details.ai = { calls: 0, skipped: ['model_unavailable'], model: cfg.aiModel, error: modelErrorState.slice(cfg.aiModel.length + 1, cfg.aiModel.length + 201) };
+    return result;
+  }
   const recent = now.getTime() - AI_REANALYSIS_DAYS * 86_400_000;
   const ordered = [...touched].sort((a, b) => Number(accepted.has(b.id)) - Number(accepted.has(a.id)));
   const skipped: string[] = [];
@@ -440,6 +446,11 @@ async function analyze(ai: AiBinding, repo: Repo, cfg: ScannerConfig, touched: T
       result.neurons += outcome.neuronsEstimated;
       result.inputTokens += outcome.usage.inputTokens;
       result.outputTokens += outcome.usage.outputTokens;
+    }
+    if (outcome.status === 'error' && outcome.unavailable) {
+      result.modelError = `${cfg.aiModel}|${outcome.error ?? 'unavailable'}`;
+      skipped.push('model_unavailable');
+      break;
     }
     if (outcome.status === 'error' && /limit|quota|3040|429/i.test(outcome.error ?? '')) {
       skipped.push('model_quota_error');

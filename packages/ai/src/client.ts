@@ -19,6 +19,12 @@ export interface AnalysisOutcome {
   model: string;
   error?: string;
   rawExcerpt?: string;
+  /** True when the error says the model itself cannot be used (deprecated, unknown): retrying is pointless. */
+  unavailable?: boolean;
+}
+
+export function isModelUnavailable(message: string): boolean {
+  return /deprecated|no such model|model not found|not supported|5028|5007/i.test(message);
 }
 
 function readUsage(raw: unknown): { inputTokens: number; outputTokens: number } | null {
@@ -42,6 +48,7 @@ export async function analyzeMarket(ai: AiBinding, model: string, input: Analysi
   }
   const messages = buildMessages(input);
   const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
+  const promptTokens = Math.ceil(promptChars / 4);
   let raw: unknown;
   try {
     raw = await ai.run(model, {
@@ -52,15 +59,15 @@ export async function analyzeMarket(ai: AiBinding, model: string, input: Analysi
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const inputTokens = approxTokens(String(promptChars));
-    const neurons = estimateNeurons(model, approxTokens(' '.repeat(promptChars)), 0);
+    // A refused call (deprecated model, quota) most likely consumed nothing; the prompt size is still charged to stay conservative.
+    const neurons = estimateNeurons(model, promptTokens, 0);
     budget.record(neurons);
-    return { status: 'error', analysis: fallbackAnalysis('model_error'), adjustments: [], usage: { inputTokens, outputTokens: 0, estimated: true }, neuronsEstimated: neurons, model, error: message.slice(0, 300) };
+    return { status: 'error', analysis: fallbackAnalysis('model_error'), adjustments: [], usage: { inputTokens: promptTokens, outputTokens: 0, estimated: true }, neuronsEstimated: neurons, model, error: message.slice(0, 300), unavailable: isModelUnavailable(message) };
   }
 
   const usage = readUsage(raw);
   const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
-  const tokens = usage ?? { inputTokens: approxTokens(' '.repeat(promptChars)), outputTokens: approxTokens(rawText) };
+  const tokens = usage ?? { inputTokens: promptTokens, outputTokens: approxTokens(rawText) };
   const neurons = estimateNeurons(model, tokens.inputTokens, tokens.outputTokens);
   budget.record(neurons);
 

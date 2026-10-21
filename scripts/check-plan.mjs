@@ -9,7 +9,7 @@ import { join } from 'node:path';
 const API = 'https://api.cloudflare.com/client/v4';
 const configPath = join(process.cwd(), 'apps/worker/wrangler.jsonc');
 const wranglerConfig = readFileSync(configPath, 'utf8');
-const model = /"AI_MODEL":\s*"([^"]+)"/.exec(wranglerConfig)?.[1] ?? '@cf/meta/llama-3.1-8b-instruct';
+const model = /"AI_MODEL":\s*"([^"]+)"/.exec(wranglerConfig)?.[1] ?? '@cf/meta/llama-3.1-8b-instruct-fp8-fast';
 
 function wranglerToken() {
   if (process.env.CLOUDFLARE_API_TOKEN) return { token: process.env.CLOUDFLARE_API_TOKEN, source: 'CLOUDFLARE_API_TOKEN' };

@@ -208,7 +208,9 @@ describe('scan orchestration', () => {
 
   it('stores a guarded AI analysis and respects the daily budget', async () => {
     const pm = fakePolymarket();
-    const r = await runScan(env, 'test', { fetch: pm.fetch, ai: stubAi(), now: at(T0), sleep: async () => {} });
+    const r0 = await runScan(env, 'test', { fetch: pm.fetch, ai: stubAi(), now: at(T0), sleep: async () => {} });
+    expect(r0.aiCalls, 'discovery runs do not spend the model budget').toBe(0);
+    const r = await runScan(env, 'test', { fetch: pm.fetch, ai: stubAi(), now: at(new Date(T0.getTime() + 15 * 60_000)), sleep: async () => {} });
     expect(r.aiCalls).toBe(1);
     const a = await env.DB.prepare(`SELECT status, probability_estimate, confidence, recommendation, adjustments_json, neurons_est FROM ai_analyses`).first<Record<string, unknown>>();
     expect(a?.status).toBe('ok');
@@ -222,7 +224,7 @@ describe('scan orchestration', () => {
     await new Repo(env.DB).addQuota('2026-10-21', { ai_calls: 1000 }, T0.toISOString());
     let called = false;
     const spy = { run: async () => { called = true; return { response: {} }; } };
-    const r2 = await runScan(env, 'test', { fetch: pm.fetch, ai: spy, now: at(new Date(T0.getTime() + 15 * 60_000)), sleep: async () => {} });
+    const r2 = await runScan(env, 'test', { fetch: pm.fetch, ai: spy, now: at(new Date(T0.getTime() + 30 * 60_000)), sleep: async () => {} });
     expect(r2.aiCalls).toBe(0);
     expect(called).toBe(false);
   });
@@ -230,12 +232,20 @@ describe('scan orchestration', () => {
   it('survives a model failure and an upstream outage, logging the error instead of crashing', async () => {
     const failingAi = { run: async () => { throw new Error('3040: daily limit exceeded'); } };
     const pm = fakePolymarket();
-    const r = await runScan(env, 'test', { fetch: pm.fetch, ai: failingAi, now: at(T0), sleep: async () => {} });
+    await runScan(env, 'test', { fetch: pm.fetch, ai: failingAi, now: at(T0), sleep: async () => {} });
+    const r = await runScan(env, 'test', { fetch: pm.fetch, ai: failingAi, now: at(new Date(T0.getTime() + 15 * 60_000)), sleep: async () => {} });
     expect(r.status).toBe('ok');
     expect((await env.DB.prepare(`SELECT status FROM ai_analyses`).first<{ status: string }>())?.status).toBe('error');
 
+    // A deprecated model is latched: the next run does not call it again.
+    const deprecated = { calls: 0, run: async function () { this.calls += 1; throw new Error('5028: @cf/x/y was deprecated on 2026-05-30'); } };
+    await runScan(env, 'test', { fetch: pm.fetch, ai: deprecated, now: at(new Date(T0.getTime() + 30 * 60_000)), sleep: async () => {} });
+    await runScan(env, 'test', { fetch: pm.fetch, ai: deprecated, now: at(new Date(T0.getTime() + 45 * 60_000)), sleep: async () => {} });
+    expect(deprecated.calls).toBe(1);
+    expect(await new Repo(env.DB).getState('ai_model_error')).toMatch(/deprecated/);
+
     const down = { fetch: async () => new Response('bad gateway', { status: 502 }) };
-    const r2 = await runScan(env, 'test', { fetch: down.fetch, ai: null, now: at(new Date(T0.getTime() + 15 * 60_000)), sleep: async () => {} });
+    const r2 = await runScan(env, 'test', { fetch: down.fetch, ai: null, now: at(new Date(T0.getTime() + 60 * 60_000)), sleep: async () => {} });
     expect(r2.status).toBe('error');
     expect(r2.error).toMatch(/HTTP 502/);
     const log = await env.DB.prepare(`SELECT status, error FROM run_logs ORDER BY id DESC LIMIT 1`).first<{ status: string; error: string }>();

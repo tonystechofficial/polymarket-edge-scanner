@@ -41,7 +41,7 @@ export function evaluateValue(input: EvaluateInput): SignalDecision {
   const book = side === 'YES' ? input.yesBook : input.noBook;
   const bestAsk = book.asks[0]?.price ?? null;
   const bestBid = book.bids[0]?.price ?? null;
-  const spread = bestAsk !== null && bestBid !== null ? bestAsk - bestBid : null;
+  const spread = bestAsk !== null && bestBid !== null ? round(bestAsk - bestBid, 4) : null;
 
   const daysToEnd = daysBetween(now, market.endDate);
   if (daysToEnd < params.min_days_to_end) rejections.push(`ends_too_soon:${round(daysToEnd, 3)}d`);
