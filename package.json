@@ -1,0 +1,38 @@
+{
+  "name": "polymarket-edge-scanner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only Polymarket market scanner with an explainable value engine and Workers AI analysis, deployable on Cloudflare's free tier.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "audit:env": "node scripts/audit-env.mjs",
+    "typecheck": "tsc -p tsconfig.json && tsc -p apps/dashboard/tsconfig.json",
+    "test": "npm run test:unit && npm run test:worker",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:worker": "vitest run --config apps/worker/vitest.config.ts",
+    "test:prod": "node scripts/smoke-prod.mjs",
+    "build:dashboard": "npm run build --workspace apps/dashboard",
+    "dev": "npm run build:dashboard && wrangler dev --config apps/worker/wrangler.jsonc",
+    "migrate:local": "wrangler d1 migrations apply pes-db --local --config apps/worker/wrangler.jsonc",
+    "migrate:remote": "wrangler d1 migrations apply pes-db --remote --config apps/worker/wrangler.jsonc",
+    "deploy": "npm run build:dashboard && wrangler deploy --config apps/worker/wrangler.jsonc",
+    "deploy:dry": "npm run build:dashboard && wrangler deploy --dry-run --outdir .wrangler/dry-run --config apps/worker/wrangler.jsonc",
+    "pretest:worker": "npm run build:dashboard"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.6",
+    "@cloudflare/workers-types": "5.20261021.1",
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12",
+    "wrangler": "4.151.3"
+  }
+}

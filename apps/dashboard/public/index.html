@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Polymarket Edge Scanner</title>
+    <meta name="description" content="Read-only, simulation-only scanner of Polymarket markets with an explainable value engine, running on Cloudflare's free tier." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f766e'/%3E%3Cpath d='M7 22l5-7 4 4 4-9 5 6' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="dot" aria-hidden="true"></span>
+        <h1>Polymarket Edge Scanner</h1>
+        <span class="badge sim" title="This build cannot place orders.">simulation only</span>
+      </div>
+      <nav class="tabs" aria-label="Sections">
+        <a href="#overview">Overview</a>
+        <a href="#markets">Markets</a>
+        <a href="#signals">Signals</a>
+        <a href="#simulations">Simulations</a>
+        <a href="#calibration">Calibration</a>
+        <a href="#ai">AI</a>
+        <a href="#errors">Errors</a>
+        <a href="#quotas">Quotas</a>
+        <a href="#params">Parameters</a>
+        <a href="#admin">Admin</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="overview" class="card">
+        <h2>System status</h2>
+        <div id="status" class="grid"><p class="muted">Loading…</p></div>
+      </section>
+
+      <section id="markets" class="card">
+        <div class="row between">
+          <h2>Tracked markets</h2>
+          <label class="inline">Category <select id="market-category"><option value="">all</option></select></label>
+        </div>
+        <div id="markets-table" class="table-wrap"></div>
+      </section>
+
+      <section id="signals" class="card">
+        <div class="row between">
+          <h2>Signals</h2>
+          <label class="inline">Status
+            <select id="signal-status"><option value="">all</option><option value="ACCEPTED">accepted</option><option value="REJECTED">rejected</option></select>
+          </label>
+        </div>
+        <p class="muted small">Each signal lists why it was accepted or rejected. <code>INSUFFICIENT_EVIDENCE</code> means no independent estimate existed: the market price is never used as one.</p>
+        <div id="signals-table" class="table-wrap"></div>
+        <div id="signal-detail" class="detail" hidden></div>
+      </section>
+
+      <section id="simulations" class="card">
+        <h2>Simulated orders</h2>
+        <p class="muted small">Paper fills against book snapshots, fees and slippage included. Nothing here is a real position.</p>
+        <div id="sim-summary" class="grid"></div>
+        <div id="sim-table" class="table-wrap"></div>
+      </section>
+
+      <section id="calibration" class="card">
+        <h2>Calibration</h2>
+        <div id="calibration-body"></div>
+      </section>
+
+      <section id="ai" class="card">
+        <h2>AI analyses</h2>
+        <p class="muted small">Workers AI reviews resolution rules and returns a schema-validated JSON. A probability stays <code>null</code> unless the text itself justifies it; the guard records every adjustment.</p>
+        <div id="ai-table" class="table-wrap"></div>
+      </section>
+
+      <section id="errors" class="card">
+        <h2>Recent runs and errors</h2>
+        <div id="runs-table" class="table-wrap"></div>
+        <div id="errors-table" class="table-wrap"></div>
+      </section>
+
+      <section id="quotas" class="card">
+        <h2>Free-tier quota usage (today, UTC)</h2>
+        <div id="quotas-body"></div>
+      </section>
+
+      <section id="params" class="card">
+        <h2>Strategy parameters</h2>
+        <p class="muted small">Every parameter has an allowed range enforced server-side. There is no live-trading switch.</p>
+        <div id="params-table" class="table-wrap"></div>
+      </section>
+
+      <section id="admin" class="card">
+        <h2>Admin</h2>
+        <p class="muted small">Administrative routes require a bearer token sent in the <code>Authorization</code> header. The token is kept in this tab's session storage only and is never written into a URL.</p>
+        <div class="row wrap">
+          <input id="admin-token" type="password" placeholder="admin token" autocomplete="off" />
+          <button id="admin-save">Use token</button>
+          <button id="admin-run">Run a scan now</button>
+          <button id="admin-geo">Re-check geoblock</button>
+        </div>
+        <div class="row wrap">
+          <select id="admin-param-key"></select>
+          <input id="admin-param-value" type="number" step="any" placeholder="new value" />
+          <button id="admin-param-save">Update parameter</button>
+        </div>
+        <pre id="admin-output" class="output" aria-live="polite"></pre>
+      </section>
+    </main>
+
+    <footer class="muted small">
+      Data: Polymarket public Gamma and CLOB APIs. Compute: Cloudflare Workers, D1 and Workers AI free tiers. Open source, MIT.
+      <span id="footer-version"></span>
+    </footer>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

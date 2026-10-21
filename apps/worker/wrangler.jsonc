@@ -1,0 +1,74 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "polymarket-edge-scanner",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  // The dashboard is a static bundle served by the same Worker: asset requests are free and unlimited.
+  "assets": {
+    "directory": "../dashboard/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "ai": { "binding": "AI" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pes-db",
+      // Filled by `wrangler d1 create pes-db` (see README "Deploy"). Any value works for local dev and tests.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../migrations"
+    }
+  ],
+
+  // Every 15 minutes: 96 short runs a day, far inside the free limits (see README "Quotas").
+  "triggers": { "crons": ["*/15 * * * *"] },
+
+  "vars": {
+    "SIMULATION_ONLY": "true",
+    "CRON_SCHEDULE": "*/15 * * * *",
+    "AI_ENABLED": "true",
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+    "AI_MAX_CALLS_PER_RUN": "1",
+    "AI_MAX_CALLS_PER_DAY": "60",
+    "AI_MAX_NEURONS_PER_DAY": "3000",
+    "MAX_MARKETS_PER_RUN": "8",
+    "MAX_TRACKED_MARKETS": "60",
+    "DISCOVERY_EVERY_N_RUNS": "6",
+    "RETENTION_DAYS": "30",
+    "GAMMA_BASE_URL": "https://gamma-api.polymarket.com",
+    "CLOB_BASE_URL": "https://clob.polymarket.com",
+    "GEOBLOCK_URL": "https://polymarket.com/api/geoblock"
+  },
+
+  // Test environment used by the Vitest integration: same schema and variables, no Workers AI binding
+  // (Workers AI has no local emulation; tests stub the model) and test hosts instead of Polymarket.
+  "env": {
+    "test": {
+      "d1_databases": [
+        { "binding": "DB", "database_name": "pes-db-test", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "../../migrations" }
+      ],
+      "vars": {
+        "SIMULATION_ONLY": "true",
+        "CRON_SCHEDULE": "*/15 * * * *",
+        "AI_ENABLED": "true",
+        "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+        "AI_MAX_CALLS_PER_RUN": "1",
+        "AI_MAX_CALLS_PER_DAY": "60",
+        "AI_MAX_NEURONS_PER_DAY": "3000",
+        "MAX_MARKETS_PER_RUN": "8",
+        "MAX_TRACKED_MARKETS": "60",
+        "DISCOVERY_EVERY_N_RUNS": "6",
+        "RETENTION_DAYS": "30",
+        "GAMMA_BASE_URL": "https://gamma.test",
+        "CLOB_BASE_URL": "https://clob.test",
+        "GEOBLOCK_URL": "https://geo.test/api/geoblock"
+      }
+    }
+  }
+}

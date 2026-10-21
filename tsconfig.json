@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": [
+      "@cloudflare/workers-types",
+      "@cloudflare/vitest-plugin/types"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@pes/*": [
+        "packages/*/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "apps/worker/src/**/*.ts",
+    "apps/worker/test/**/*.ts",
+    "apps/worker/worker-configuration.d.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist/**"
+  ]
+}

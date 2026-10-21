@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+.wrangler/
+apps/dashboard/dist/
+*.tsbuildinfo
+.tsbuild/
+
+# secrets and local configuration (never commit)
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+secrets/
+config
+wrangler.local.*
+
+# local databases and state
+*.sqlite
+*.sqlite-*
+*.db
+
+# test and coverage artifacts
+coverage/
+.vitest/
+test-results/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+npm-debug.log*
